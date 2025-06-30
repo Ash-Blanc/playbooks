@@ -43,6 +43,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.id)
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
@@ -52,54 +53,70 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [])
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-        },
-      },
-    })
-
-    if (!error && data.user) {
-      // Create profile
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([
-          {
-            id: data.user.id,
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
             full_name: fullName,
-            updated_at: new Date().toISOString(),
           },
-        ])
+        },
+      })
 
-      if (profileError) {
-        console.error('Error creating profile:', profileError)
+      if (error) {
+        console.error('Signup error:', error)
+        return { error }
       }
-    }
 
-    return { error }
+      // The profile will be created automatically by the database trigger
+      // No need to manually insert into profiles table
+      console.log('User signed up successfully:', data.user?.id)
+      return { error: null }
+    } catch (err) {
+      console.error('Unexpected signup error:', err)
+      return { error: err as AuthError }
+    }
   }
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-    return { error }
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      
+      if (error) {
+        console.error('Signin error:', error)
+      }
+      
+      return { error }
+    } catch (err) {
+      console.error('Unexpected signin error:', err)
+      return { error: err as AuthError }
+    }
   }
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    return { error }
+    try {
+      const { error } = await supabase.auth.signOut()
+      return { error }
+    } catch (err) {
+      console.error('Signout error:', err)
+      return { error: err as AuthError }
+    }
   }
 
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
-    return { error }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      return { error }
+    } catch (err) {
+      console.error('Reset password error:', err)
+      return { error: err as AuthError }
+    }
   }
 
   const value = {

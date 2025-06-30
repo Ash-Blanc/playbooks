@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { X, Mail, Lock, User, Eye, EyeOff, Crown, AlertCircle } from 'lucide-react'
+import { X, Mail, Lock, User, Eye, EyeOff, Crown, AlertCircle, CheckCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 interface EnhancedAuthModalProps {
@@ -30,46 +30,98 @@ export const EnhancedAuthModal: React.FC<EnhancedAuthModalProps> = ({
 
   if (!isOpen) return null
 
+  const validateForm = () => {
+    if (!formData.email) {
+      setError('Email is required')
+      return false
+    }
+    
+    if (!formData.email.includes('@')) {
+      setError('Please enter a valid email address')
+      return false
+    }
+
+    if (mode !== 'reset') {
+      if (!formData.password) {
+        setError('Password is required')
+        return false
+      }
+      
+      if (formData.password.length < 6) {
+        setError('Password must be at least 6 characters')
+        return false
+      }
+    }
+
+    if (mode === 'signup') {
+      if (!formData.name.trim()) {
+        setError('Full name is required')
+        return false
+      }
+      
+      if (formData.password !== formData.confirmPassword) {
+        setError('Passwords do not match')
+        return false
+      }
+    }
+
+    return true
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
     setSuccess(null)
 
+    if (!validateForm()) {
+      setLoading(false)
+      return
+    }
+
     try {
       if (mode === 'signup') {
-        if (formData.password !== formData.confirmPassword) {
-          setError('Passwords do not match')
-          return
-        }
-        if (formData.password.length < 6) {
-          setError('Password must be at least 6 characters')
-          return
-        }
-        
-        const { error } = await signUp(formData.email, formData.password, formData.name)
+        const { error } = await signUp(formData.email, formData.password, formData.name.trim())
         if (error) {
-          setError(error.message)
+          if (error.message.includes('already registered')) {
+            setError('An account with this email already exists. Please sign in instead.')
+          } else if (error.message.includes('email')) {
+            setError('Please enter a valid email address')
+          } else {
+            setError(error.message)
+          }
         } else {
-          setSuccess('Account created! Please check your email to verify your account.')
+          setSuccess('Account created successfully! You can now sign in.')
+          setMode('login')
+          setFormData({ ...formData, password: '', confirmPassword: '' })
         }
       } else if (mode === 'login') {
         const { error } = await signIn(formData.email, formData.password)
         if (error) {
-          setError(error.message)
+          if (error.message.includes('Invalid login credentials')) {
+            setError('Invalid email or password. Please check your credentials and try again.')
+          } else if (error.message.includes('Email not confirmed')) {
+            setError('Please check your email and click the confirmation link before signing in.')
+          } else {
+            setError(error.message)
+          }
         } else {
-          onClose()
+          setSuccess('Signed in successfully!')
+          setTimeout(() => {
+            onClose()
+          }, 1000)
         }
       } else if (mode === 'reset') {
         const { error } = await resetPassword(formData.email)
         if (error) {
           setError(error.message)
         } else {
-          setSuccess('Password reset email sent! Check your inbox.')
+          setSuccess('Password reset email sent! Please check your inbox.')
         }
       }
     } catch (err) {
-      setError('An unexpected error occurred')
+      console.error('Auth error:', err)
+      setError('An unexpected error occurred. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -78,6 +130,23 @@ export const EnhancedAuthModal: React.FC<EnhancedAuthModalProps> = ({
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     setError(null)
+    setSuccess(null)
+  }
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      email: '',
+      password: '',
+      confirmPassword: ''
+    })
+    setError(null)
+    setSuccess(null)
+  }
+
+  const switchMode = (newMode: 'login' | 'signup' | 'reset') => {
+    setMode(newMode)
+    resetForm()
   }
 
   return (
@@ -115,13 +184,14 @@ export const EnhancedAuthModal: React.FC<EnhancedAuthModalProps> = ({
         <div className="p-6">
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
-              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
               <span className="text-red-700 text-sm">{error}</span>
             </div>
           )}
 
           {success && (
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-2">
+              <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
               <span className="text-green-700 text-sm">{success}</span>
             </div>
           )}
@@ -209,7 +279,7 @@ export const EnhancedAuthModal: React.FC<EnhancedAuthModalProps> = ({
                 </label>
                 <button 
                   type="button" 
-                  onClick={() => setMode('reset')}
+                  onClick={() => switchMode('reset')}
                   className="text-black hover:text-gray-600 font-medium"
                 >
                   Forgot password?
@@ -236,7 +306,7 @@ export const EnhancedAuthModal: React.FC<EnhancedAuthModalProps> = ({
                mode === 'signup' ? "Already have an account?" :
                "Remember your password?"}
               <button
-                onClick={() => setMode(
+                onClick={() => switchMode(
                   mode === 'login' ? 'signup' : 
                   mode === 'signup' ? 'login' : 
                   'login'
