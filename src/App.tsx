@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { AuthProvider } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import PlaybookGrid from './components/PlaybookGrid';
@@ -6,8 +8,9 @@ import PlaybookDetail from './components/PlaybookDetail';
 import Dashboard from './components/Dashboard';
 import SuccessPlaybooks from './components/SuccessPlaybooks';
 import UserAccount from './components/UserAccount';
-import AuthModal from './components/AuthModal';
+import { EnhancedAuthModal } from './components/EnhancedAuthModal';
 import { PlayBook, UserProgress } from './types';
+import { useAuth } from './contexts/AuthContext';
 
 const mockPlaybooks: PlayBook[] = [
   {
@@ -121,12 +124,13 @@ const mockUserProgress: UserProgress = {
   currentAssessments: []
 };
 
-function App() {
+const AppContent: React.FC = () => {
   const [activeSection, setActiveSection] = useState('home');
   const [selectedPlaybook, setSelectedPlaybook] = useState<PlayBook | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [isAuthenticated, setIsAuthenticated] = useState(true); // Set to true for demo
+  
+  const { user } = useAuth();
 
   const handleAuthClick = (mode: 'login' | 'signup') => {
     setAuthMode(mode);
@@ -145,11 +149,19 @@ function App() {
 
     switch (activeSection) {
       case 'dashboard':
-        return <Dashboard userProgress={mockUserProgress} />;
+        return (
+          <ProtectedRoute>
+            <Dashboard userProgress={mockUserProgress} />
+          </ProtectedRoute>
+        );
       case 'playbooks':
         return <SuccessPlaybooks playbooks={mockPlaybooks} onPlaybookSelect={setSelectedPlaybook} />;
       case 'account':
-        return <UserAccount />;
+        return (
+          <ProtectedRoute>
+            <UserAccount />
+          </ProtectedRoute>
+        );
       default:
         return (
           <>
@@ -169,18 +181,26 @@ function App() {
         <Navbar 
           activeSection={activeSection} 
           setActiveSection={setActiveSection}
-          isAuthenticated={isAuthenticated}
+          isAuthenticated={!!user}
           onAuthClick={handleAuthClick}
         />
       )}
       {renderContent()}
       
-      <AuthModal
+      <EnhancedAuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         initialMode={authMode}
       />
     </div>
+  );
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
